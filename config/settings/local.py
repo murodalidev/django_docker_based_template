@@ -1,17 +1,14 @@
 from .base import *  # noqa: F403
 from .base import INSTALLED_APPS
 from .base import MIDDLEWARE
-from .base import env
 
 # GENERAL
 # ------------------------------------------------------------------------------
 # https://docs.djangoproject.com/en/dev/ref/settings/#debug
 DEBUG = True
 # https://docs.djangoproject.com/en/dev/ref/settings/#secret-key
-SECRET_KEY = env(
-    "DJANGO_SECRET_KEY",
-    default="lVPR05kLyPzJtCg5MibViP7xQbnvxZUrdjb0kwmfj0kKR2pMFwJ4s6nDUjXIs8pe",
-)
+SECRET_KEY = "lVPR05kLyPzJtCg5MibViP7xQbnvxZUrdjb0kwmfj0kKR2pMFwJ4s6nDUjXIs8pe"
+
 # https://docs.djangoproject.com/en/dev/ref/settings/#allowed-hosts
 ALLOWED_HOSTS = ["localhost", "0.0.0.0", "127.0.0.1"]  # noqa: S104
 
@@ -20,8 +17,10 @@ ALLOWED_HOSTS = ["localhost", "0.0.0.0", "127.0.0.1"]  # noqa: S104
 # ------------------------------------------------------------------------------
 # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#prerequisites
 INSTALLED_APPS += ["debug_toolbar"]
+
 # https://django-debug-toolbar.readthedocs.io/en/latest/installation.html#middleware
 MIDDLEWARE += ["debug_toolbar.middleware.DebugToolbarMiddleware"]
+
 # https://django-debug-toolbar.readthedocs.io/en/latest/configuration.html#debug-toolbar-config
 DEBUG_TOOLBAR_CONFIG = {
     "DISABLE_PANELS": [
@@ -33,10 +32,21 @@ DEBUG_TOOLBAR_CONFIG = {
     "SHOW_TEMPLATE_CONTEXT": True,
 }
 
-# Celery
+# REST-FRAMEWORK
 # ------------------------------------------------------------------------------
+auth_list = [
+    'rest_framework_simplejwt.authentication.JWTAuthentication',
+    'rest_framework.authentication.SessionAuthentication',
+    'rest_framework.authentication.BasicAuthentication'
+]
+REST_FRAMEWORK['DEFAULT_AUTHENTICATION_CLASSES'] = auth_list
+REST_FRAMEWORK['DEFAULT_RENDERER_CLASSES'].append('rest_framework.renderers.BrowsableAPIRenderer')
 
-# https://docs.celeryq.dev/en/stable/userguide/configuration.html#task-eager-propagates
-CELERY_TASK_EAGER_PROPAGATES = True
-# Your stuff...
+# SWAGGER
 # ------------------------------------------------------------------------------
+SPECTACULAR_SETTINGS['SERVERS'] = [
+    {
+        "url": "http://127.0.0.1:8000",
+        "description": "Local Development server"
+    },
+]

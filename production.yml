@@ -1,44 +1,129 @@
-volumes:
-  production_postgres_data: {}
-  production_postgres_data_backups: {}
-  production_redis_data: {}
-
-
 
 services:
   django: &django
     build:
       context: .
       dockerfile: ./compose/production/django/Dockerfile
-
-    image: my_awesome_project_production_django
+    container_name: django
     depends_on:
       - postgres
       - redis
+    volumes:
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/media
     env_file:
-      - ./.envs/.production/.django
-      - ./.envs/.production/.postgres
-    command: /start
+      - ./.envs/.production/.env
+      - ./.envs/.production/.db
+      - ./.envs/.production/.flower
+      - ./.envs/.production/.rabbitmq
+    ports:
+      - '8000:8000'
+    command: /start-django
+    networks:
+      - site_network
 
   postgres:
     build:
       context: .
       dockerfile: ./compose/production/postgres/Dockerfile
-    image: my_awesome_project_production_postgres
+    container_name: postgres
     volumes:
-      - production_postgres_data:/var/lib/postgresql/data
-      - production_postgres_data_backups:/backups
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/backups
     env_file:
-      - ./.envs/.production/.postgres
+      - ./.envs/.production/.db
+    networks:
+      - site_network
+    restart: always
+
+  rabbitmq:
+    hostname: rabbitmq
+    image: rabbitmq:3-management
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    expose:
+      - 15672  # Management port
+      - 5672   # AMQP port
+    env_file:
+      - ./.envs/.production/.rabbitmq
+    networks:
+      - site_network
+    restart: always
+
+  redis:
+    image: redis:7.4.1
+    container_name: redis
+    expose:
+      - 6379
+    volumes:
+      - redis_data:/var/lib/redis/data/
+    command: redis-server --requirepass "142536475869"
+    networks:
+      - site_network
+    restart: always
 
 
   celeryworker:
     <<: *django
-    image: my_awesome_project_production_celeryworker
+    container_name: celeryworker
     command: /start-celeryworker
+    depends_on:
+      - rabbitmq
+    ports: []
+    networks:
+      - site_network
+#    restart: always
 
   celerybeat:
     <<: *django
-    image: my_awesome_project_production_celerybeat
+    container_name: celerybeat
     command: /start-celerybeat
+    depends_on:
+      - rabbitmq
+    ports: []
+    networks:
+      - site_network
+#    restart: always
 
+  celeryflower:
+    <<: *django
+    container_name: celeryflower
+    command: /start-celeryflower
+    ports:
+      - "5555:5555"
+    depends_on:
+      - rabbitmq
+    env_file:
+      - ./.envs/.production/.flower
+    networks:
+      - site_network
+#    restart: always
+
+  nginx:
+    build: ./compose/production/nginx
+    ports:
+      - 8080:80
+    container_name: nginx
+    volumes:
+      - static_volume:/usr/src/app/staticfiles
+      - media_volume:/usr/src/app/media
+    depends_on:
+      - django
+    networks:
+      - site_network
+    restart: always
+
+
+volumes:
+  static_volume: {}
+  media_volume: {}
+  redis_data: {}
+  postgres_data: {}
+
+networks:
+  site_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.190.0/24

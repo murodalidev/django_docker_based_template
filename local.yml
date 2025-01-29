@@ -1,64 +1,113 @@
-volumes:
-  my_awesome_project_local_postgres_data: {}
-  my_awesome_project_local_postgres_data_backups: {}
-  my_awesome_project_local_redis_data: {}
 
 services:
   django: &django
     build:
       context: .
       dockerfile: ./compose/local/django/Dockerfile
-    image: my_awesome_project_local_django
-    container_name: my_awesome_project_local_django
+    container_name: django
     depends_on:
       - postgres
       - redis
     volumes:
-      - .:/app:z
+      - static_volume:/usr/src/app/staticfiles
     env_file:
-      - ./.envs/.local/.django
-      - ./.envs/.local/.postgres
+      - ./.envs/.local/.env
+      - ./.envs/.local/.db
+      - ./.envs/.local/.flower
+      - ./.envs/.local/.rabbitmq
     ports:
       - '8000:8000'
-    command: /start
+    command: /start-django
+    networks:
+      - site_network
 
   postgres:
     build:
       context: .
-      dockerfile: ./compose/production/postgres/Dockerfile
-    image: my_awesome_project_production_postgres
-    container_name: my_awesome_project_local_postgres
+      dockerfile: ./compose/local/postgres/Dockerfile
+    container_name: postgres
     volumes:
-      - my_awesome_project_local_postgres_data:/var/lib/postgresql/data
-      - my_awesome_project_local_postgres_data_backups:/backups
+      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/backups
     env_file:
-      - ./.envs/.local/.postgres
+      - ./.envs/.local/.db
+    networks:
+      - site_network
+    restart: always
+
+  rabbitmq:
+    hostname: rabbitmq
+    image: rabbitmq:3-management
+    ports:
+      - "15672:15672"
+      - "5672:5672"
+    expose:
+      - 15672  # Management port
+      - 5672   # AMQP port
+    env_file:
+      - ./.envs/.local/.rabbitmq
+    networks:
+      - site_network
+    restart: always
 
   redis:
-    image: docker.io/redis:6
-    container_name: my_awesome_project_local_redis
-
+    image: redis:7.4.1
+    container_name: redis
+    expose:
+      - 6379
     volumes:
-      - my_awesome_project_local_redis_data:/data
+      - redis_data:/var/lib/redis/data/
+    command: redis-server --requirepass "142536475869"
+    networks:
+      - site_network
+    restart: always
 
 
   celeryworker:
     <<: *django
-    image: my_awesome_project_local_celeryworker
-    container_name: my_awesome_project_local_celeryworker
-    depends_on:
-      - redis
-      - postgres
-    ports: []
+    container_name: celeryworker
     command: /start-celeryworker
+    depends_on:
+      - rabbitmq
+    ports: []
+    networks:
+      - site_network
+#    restart: always
 
   celerybeat:
     <<: *django
-    image: my_awesome_project_local_celerybeat
-    container_name: my_awesome_project_local_celerybeat
-    depends_on:
-      - redis
-      - postgres
-    ports: []
+    container_name: celerybeat
     command: /start-celerybeat
+    depends_on:
+      - rabbitmq
+    ports: []
+    networks:
+      - site_network
+#    restart: always
 
+  celeryflower:
+    <<: *django
+    container_name: celeryflower
+    command: /start-celeryflower
+    ports:
+      - "5555:5555"
+    depends_on:
+      - rabbitmq
+    env_file:
+      - ./.envs/.local/.flower
+    networks:
+      - site_network
+#    restart: always
+
+
+volumes:
+  static_volume: {}
+  redis_data: {}
+  postgres_data: {}
+
+networks:
+  site_network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.16.188.0/24

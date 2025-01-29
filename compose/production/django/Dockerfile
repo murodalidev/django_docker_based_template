@@ -1,89 +1,61 @@
+FROM docker.io/python:3.12.7-slim-bullseye AS python
 
-# define an alias for the specific python version used in this file.
-FROM docker.io/python:3.12.7-slim-bookworm AS python
+WORKDIR /usr/src/app
 
-# Python build stage
-FROM python AS python-build-stage
+# Create devcontainer user and add it to sudoers
+RUN addgroup --system app && adduser --system --group app
 
-ARG BUILD_ENVIRONMENT=production
+RUN echo "deb https://nexus.asakabank.uz/repository/Debian-deb/ bullseye main contrib non-free" > /etc/apt/sources.list && \
+    echo "deb https://nexus.asakabank.uz/repository/Debian-security/ bullseye-security main contrib non-free" >> /etc/apt/sources.list
 
-# Install apt packages
-RUN apt-get update && apt-get install --no-install-recommends -y \
-  # dependencies for building Python packages
-  build-essential \
-  # psycopg dependencies
-  libpq-dev
+# Install additional dependencies
+RUN apt-get update --fix-missing && \
+    apt-get install --no-install-recommends -y \
+    libc-dev \
+    build-essential \
+    python3-dev \
+    libpq-dev \
+    gettext \
+    shared-mime-info && \
+    apt-get clean && rm -rf /var/lib/apt/lists/*
 
+ # Requirements are installed here to ensure they will be cached.
+COPY ./requirements ./requirements
 
-# Requirements are installed here to ensure they will be cached.
-COPY ./requirements .
+RUN pip install --upgrade pip setuptools wheel
 
-# Create Python Dependency and Sub-Dependency Wheels.
-RUN pip wheel --wheel-dir /usr/src/app/wheels  \
-  -r ${BUILD_ENVIRONMENT}.txt
+RUN pip install -r requirements/production.txt
 
-
-# Python 'run' stage
-FROM python AS python-run-stage
-
-ARG BUILD_ENVIRONMENT=production
-ARG APP_HOME=/app
-
-ENV PYTHONUNBUFFERED=1
-ENV PYTHONDONTWRITEBYTECODE=1
-ENV BUILD_ENV=${BUILD_ENVIRONMENT}
-
-WORKDIR ${APP_HOME}
-
-RUN addgroup --system django \
-    && adduser --system --ingroup django django
-
-
-# Install required system dependencies
-RUN apt-get update && apt-get install --no-install-recommends -y \
-  # psycopg dependencies
-  libpq-dev \
-  # Translations dependencies
-  gettext \
-  # entrypoint
-  wait-for-it \
-  # cleaning up unused files
-  && apt-get purge -y --auto-remove -o APT::AutoRemove::RecommendsImportant=false \
-  && rm -rf /var/lib/apt/lists/*
-
-# All absolute dir copies ignore workdir instruction. All relative dir copies are wrt to the workdir instruction
-# copy python dependency wheels from python-build-stage
-COPY --from=python-build-stage /usr/src/app/wheels  /wheels/
-
-# use wheels to install python dependencies
-RUN pip install --no-cache-dir --no-index --find-links=/wheels/ /wheels/* \
-  && rm -rf /wheels/
-
-
-COPY --chown=django:django ./compose/production/django/entrypoint /entrypoint
+COPY ./compose/production/django/entrypoint /entrypoint
 RUN sed -i 's/\r$//g' /entrypoint
 RUN chmod +x /entrypoint
 
+COPY ./compose/production/django/start /start-django
+RUN sed -i 's/\r$//g' /start-django
+RUN chmod +x /start-django
 
-COPY --chown=django:django ./compose/production/django/start /start
-RUN sed -i 's/\r$//g' /start
-RUN chmod +x /start
-
-COPY --chown=django:django ./compose/production/django/celery/worker/start /start-celeryworker
+COPY ./compose/production/django/celery/worker/start /start-celeryworker
 RUN sed -i 's/\r$//g' /start-celeryworker
 RUN chmod +x /start-celeryworker
 
-
-COPY --chown=django:django ./compose/production/django/celery/beat/start /start-celerybeat
+COPY ./compose/production/django/celery/beat/start /start-celerybeat
 RUN sed -i 's/\r$//g' /start-celerybeat
 RUN chmod +x /start-celerybeat
 
+COPY ./compose/production/django/celery/flower/start /start-celeryflower
+RUN sed -i 's/\r$//g' /start-celeryflower
+RUN chmod +x /start-celeryflower
+
+# Create staticfiles directory and set permissions
+RUN mkdir -p /usr/src/app/staticfiles && \
+    chown -R app:app /usr/src/app/staticfiles && \
+    chmod -R 755 /usr/src/app/staticfiles
+
 # copy application code to WORKDIR
-COPY --chown=django:django . ${APP_HOME}
+COPY . .
 
-# make django owner of the WORKDIR directory as well.
-RUN chown -R django:django ${APP_HOME}
+RUN chown -R app:app /usr/src/app
 
-USER django
+USER app
 
 ENTRYPOINT ["/entrypoint"]
