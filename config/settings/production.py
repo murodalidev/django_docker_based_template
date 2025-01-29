@@ -45,17 +45,27 @@ LOGGING = {
             "class": "logging.StreamHandler",
             "formatter": "verbose",
         },
+        "telegram": {
+            "level": "ERROR",
+            "class": "apps.utils.telegram_log_handler.TelegramErrorHandler",
+            "formatter": "verbose",
+        },
     },
     "root": {"level": "INFO", "handlers": ["console"]},
     "loggers": {
+        "telegram": {
+            "level": "ERROR",
+            "handlers": ["telegram"],
+            "propagate": False,
+        },
         "django.request": {
-            "handlers": ["mail_admins"],
+            "handlers": ["mail_admins", "telegram"],
             "level": "ERROR",
             "propagate": True,
         },
         "django.security.DisallowedHost": {
             "level": "ERROR",
-            "handlers": ["console", "mail_admins"],
+            "handlers": ["console", "mail_admins", "telegram"],
             "propagate": True,
         },
     },
