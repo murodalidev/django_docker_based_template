@@ -26,7 +26,7 @@ RUN pip install --upgrade pip setuptools wheel
 
 RUN pip install -r requirements/production.txt
 
-COPY ./compose/production/django/entrypoint /entrypoint
+COPY ./compose/general/django/entrypoint /entrypoint
 RUN sed -i 's/\r$//g' /entrypoint
 RUN chmod +x /entrypoint
 
@@ -34,15 +34,15 @@ COPY ./compose/production/django/start /start-django
 RUN sed -i 's/\r$//g' /start-django
 RUN chmod +x /start-django
 
-COPY ./compose/production/django/celery/worker/start /start-celeryworker
+COPY ./compose/general/django/celery/worker/start /start-celeryworker
 RUN sed -i 's/\r$//g' /start-celeryworker
 RUN chmod +x /start-celeryworker
 
-COPY ./compose/production/django/celery/beat/start /start-celerybeat
+COPY ./compose/general/django/celery/beat/start /start-celerybeat
 RUN sed -i 's/\r$//g' /start-celerybeat
 RUN chmod +x /start-celerybeat
 
-COPY ./compose/production/django/celery/flower/start /start-celeryflower
+COPY ./compose/general/django/celery/flower/start /start-celeryflower
 RUN sed -i 's/\r$//g' /start-celeryflower
 RUN chmod +x /start-celeryflower
 

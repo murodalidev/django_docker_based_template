@@ -25,7 +25,7 @@ services:
   postgres:
     build:
       context: .
-      dockerfile: ./compose/production/postgres/Dockerfile
+      dockerfile: ./compose/general/postgres/Dockerfile
     container_name: postgres
     volumes:
       - postgres_data:/var/lib/postgresql/data
